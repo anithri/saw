@@ -4,11 +4,10 @@ require "colorize"
 module Saw
   module Logger
     LOG_LEVELS = [:Footprint, :Debug, :Info, :Summary, :Warn, :Error, :Fatal]
-    DEFAULT_SCREEN_LEVEL = :Info
-    DEFAULT_FILE_LEVEL = :Summary
-    DEFAULT_OPTS = {'color' => true,'trace' => false, 'console_level' => DEFAULT_SCREEN_LEVEL, 'file_level' => DEFAULT_FILE_LEVEL}
-    LOG_COLORS = [:grey, :cyan, :light_blue, :white, :yellow, :red, {:color => :red, :background => :white}]
-
+    DEFAULT_LEVEL = :Summary
+    DEFAULT_OPTS = {'color' => true,'trace' => false, 'log_level' => DEFAULT_LEVEL, 'silent' => false, 'label' => false}
+    LOG_COLORS = [:light_blue,:cyan, :green, :white, :yellow, :light_red, :red]
+    LOG_FILE_FORMAT = "%d [%9l] %m"
     include Log4r
     def self.find_level(level)
       return level if level.kind_of?(Numeric)
@@ -24,9 +23,8 @@ module Saw
 
     def self.setup_logger(in_opts = {})
       opts = DEFAULT_OPTS.merge(in_opts)
-      opts['console_level_num'] = find_level(opts['console_level'])
-      opts[:'file_level_num'] = find_level(opts['file_level'])
-
+      opts['log_level_num'] = find_level(opts['loglevel'])
+      opts['console_level_num'] = opts['silent'] ? FATAL : opts['log_level_num']
       Configurator.custom_levels(*LOG_LEVELS)
       Log4r::Logger.global.level = ALL
       @@logger = Log4r::Logger.new('logger')
@@ -35,15 +33,18 @@ module Saw
       @@logger.add StdoutOutputter.new('stdout', :formatter=>SawFormatter, :level => opts['console_level_num'])
       @@logger.outputters[0].formatter.color = opts['color']
       if opts['filename']
-        @@logger.add FileOutputter.new('logfile', :filename => opts['filename'], :level => opts['file_level_num'])
+        my_format = opts['trace'] ? LOG_FILE_FORMAT + " #From: %T" : LOG_FILE_FORMAT
+        @@logger.add FileOutputter.new('logfile', :formatter=>Log4r::PatternFormatter.new(:pattern=>my_format),:filename => opts['filename'], :level => opts['log_level_num'])
       end
+      @@opts = opts
+      @@logger.footprint "finished logger setup"
       @@logger
     end
 
     class SawFormatter <  Log4r::Formatter
 
-      attr_accessor :color
-      @@basicformat = "%*s %s"
+      attr_accessor :color, :label
+      @@basicformat = "%*s "
 
       def initialize(hash={})
         @depth = (hash[:depth] or hash['depth'] or 7).to_i
@@ -52,10 +53,10 @@ module Saw
 
       def format(event)
         event_color = Saw::Logger::LOG_COLORS[event.level - 1]
-        buff = sprintf(@@basicformat, Log4r::MaxLevelLength, Log4r::LNAMES[event.level],
-               event.name)
-        buff << (event.tracer.nil? ? "" : "(#{event.tracer[0]})") + ": "
-        buff << format_object(event.data) + "\n"
+        buff = @label ? sprintf(@@basicformat, Log4r::MaxLevelLength, Log4r::LNAMES[event.level]) : ""
+        buff << format_object(event.data)
+        buff << (event.tracer.nil? ? "" : "#from: #{event.tracer[0]}")
+        buff << "\n"
         self.color ? buff.colorize(event_color) : buff
       end
 

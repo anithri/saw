@@ -2,7 +2,7 @@
 lib = File.expand_path(File.dirname(__FILE__) + '/../lib')
 $LOAD_PATH.unshift(lib) if File.directory?(lib) && !$LOAD_PATH.include?(lib)
 require 'saw'
-opts = {:trace => false, :filename => '/tmp/saw.log', :console_level => 'debug', :file_level => 'summary' }
+opts = {'trace' => false, 'filename' => '/tmp/saw.log','loglevel' => 'footprint' }
 
 log = Saw::Logger.setup_logger(opts)
 
